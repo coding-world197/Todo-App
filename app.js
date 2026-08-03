@@ -1,95 +1,149 @@
-// DOM Element References
-const todoInput = document.getElementById('todo-input');
-const addBtn = document.getElementById('add-btn');
-const todoList = document.getElementById('todo-list');
+        let tasks = JSON.parse(localStorage.getItem('tasks')) || [
+            { id: 1, text: 'Design new UI components 🎨', completed: true },
+            { id: 2, text: 'Record Todo App screen demo 🎬', completed: false },
+            { id: 3, text: 'Post project video on LinkedIn 🚀', completed: false }
+        ];
+        let currentFilter = 'all';
+        let editingTaskId = null;
 
-// Load existing todos from LocalStorage
-let todos = JSON.parse(localStorage.getItem('todos')) || [];
+        document.addEventListener('DOMContentLoaded', () => {
+            updateDate();
+            renderTasks();
+        });
 
-// Initial render
-renderTodos();
+        function updateDate() {
+            const options = { weekday: 'short', month: 'short', day: 'numeric' };
+            const today = new Date();
+            document.getElementById('currentDate').textContent = today.toLocaleDateString('en-US', options);
+        }
 
-// Event Listeners
-addBtn.addEventListener('click', addTodo);
-todoInput.addEventListener('keypress', (e) => {
-  if (e.key === 'Enter') addTodo();
-});
+        function renderTasks() {
+            const taskList = document.getElementById('taskList');
+            taskList.innerHTML = '';
 
-// Render todos on the screen
-function renderTodos() {
-  todoList.innerHTML = '';
+            const filteredTasks = tasks.filter(task => {
+                if (currentFilter === 'active') return !task.completed;
+                if (currentFilter === 'completed') return task.completed;
+                return true;
+            });
 
-  todos.forEach((todo, index) => {
-    const li = document.createElement('li');
-    li.className = `todo-item ${todo.completed ? 'completed' : ''}`;
+            if (filteredTasks.length === 0) {
+                taskList.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fa-regular fa-folder-open"></i>
+                        <p>No tasks found in this view.</p>
+                    </div>
+                `;
+            } else {
+                filteredTasks.forEach(task => {
+                    const li = document.createElement('li');
+                    li.className = `task-item ${task.completed ? 'completed' : ''}`;
+                    li.innerHTML = `
+                        <div class="task-left">
+                            <div class="checkbox" onclick="toggleTask(${task.id})">
+                                <i class="fa-solid fa-check"></i>
+                            </div>
+                            <span class="task-text">${escapeHtml(task.text)}</span>
+                        </div>
+                        <div class="action-btns">
+                            <button class="icon-btn" onclick="openEditModal(${task.id})">
+                                <i class="fa-regular fa-pen-to-square"></i>
+                            </button>
+                            <button class="icon-btn delete" onclick="deleteTask(${task.id})">
+                                <i class="fa-regular fa-trash-can"></i>
+                            </button>
+                        </div>
+                    `;
+                    taskList.appendChild(li);
+                });
+            }
 
-    // Task Text
-    const span = document.createElement('span');
-    span.className = 'todo-text';
-    span.textContent = todo.text;
-    span.onclick = () => toggleComplete(index);
+            updateStats();
+            saveToLocalStorage();
+        }
 
-    // Action Buttons Container
-    const actionsDiv = document.createElement('div');
-    actionsDiv.className = 'actions';
+        function addTask() {
+            const input = document.getElementById('taskInput');
+            const text = input.value.trim();
 
-    // Edit Button
-    const editBtn = document.createElement('button');
-    editBtn.className = 'edit-btn';
-    editBtn.textContent = 'Edit';
-    editBtn.onclick = () => editTodo(index);
+            if (text === '') return;
 
-    // Delete Button
-    const deleteBtn = document.createElement('button');
-    deleteBtn.className = 'delete-btn';
-    deleteBtn.textContent = 'Delete';
-    deleteBtn.onclick = () => deleteTodo(index);
+            const newTask = {
+                id: Date.now(),
+                text: text,
+                completed: false
+            };
 
-    // Assemble DOM
-    actionsDiv.appendChild(editBtn);
-    actionsDiv.appendChild(deleteBtn);
-    li.appendChild(span);
-    li.appendChild(actionsDiv);
-    todoList.appendChild(li);
-  });
-}
+            tasks.unshift(newTask);
+            input.value = '';
+            renderTasks();
+        }
 
-// Add task
-function addTodo() {
-  const text = todoInput.value.trim();
-  if (text === '') return;
+        function handleKeyPress(e) {
+            if (e.key === 'Enter') addTask();
+        }
 
-  todos.push({ text: text, completed: false });
-  saveAndRender();
-  todoInput.value = '';
-}
+        function toggleTask(id) {
+            tasks = tasks.map(task => 
+                task.id === id ? { ...task, completed: !task.completed } : task
+            );
+            renderTasks();
+        }
 
-// Edit task
-function editTodo(index) {
-  const currentText = todos[index].text;
-  const newText = prompt('Edit your task:', currentText);
+        function deleteTask(id) {
+            tasks = tasks.filter(task => task.id !== id);
+            renderTasks();
+        }
 
-  // Update only if user enters non-empty text and doesn't click "Cancel"
-  if (newText !== null && newText.trim() !== '') {
-    todos[index].text = newText.trim();
-    saveAndRender();
-  }
-}
+        function openEditModal(id) {
+            const task = tasks.find(t => t.id === id);
+            if (!task) return;
 
-// Toggle completion state
-function toggleComplete(index) {
-  todos[index].completed = !todos[index].completed;
-  saveAndRender();
-}
+            editingTaskId = id;
+            document.getElementById('editInput').value = task.text;
+            document.getElementById('editModal').classList.add('active');
+        }
 
-// Delete task
-function deleteTodo(index) {
-  todos.splice(index, 1);
-  saveAndRender();
-}
+        function closeEditModal() {
+            editingTaskId = null;
+            document.getElementById('editModal').classList.remove('active');
+        }
 
-// Helper function to update LocalStorage and refresh DOM
-function saveAndRender() {
-  localStorage.setItem('todos', JSON.stringify(todos));
-  renderTodos();
-}
+        function saveEditedTask() {
+            const newText = document.getElementById('editInput').value.trim();
+            if (newText === '') return;
+
+            tasks = tasks.map(task => 
+                task.id === editingTaskId ? { ...task, text: newText } : task
+            );
+
+            closeEditModal();
+            renderTasks();
+        }
+
+        function setFilter(filter, btn) {
+            currentFilter = filter;
+            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            renderTasks();
+        }
+
+        function updateStats() {
+            const total = tasks.length;
+            const completed = tasks.filter(t => t.completed).length;
+            const pending = total - completed;
+
+            document.getElementById('totalTasks').textContent = total;
+            document.getElementById('completedTasks').textContent = completed;
+            document.getElementById('pendingTasks').textContent = pending;
+        }
+
+        function saveToLocalStorage() {
+            localStorage.setItem('tasks', JSON.stringify(tasks));
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
